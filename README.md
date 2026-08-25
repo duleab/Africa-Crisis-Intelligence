@@ -176,12 +176,3 @@ discover, verify, understand, map, and communicate so that African
 institutions and communities can develop faster and better-informed
 responses to disasters and emerging crises.
 
-## Author
-
-**Dule Abera Bulti**\
-MSc Data Science / Computer Science\
-AI/ML and crisis-intelligence research
-
-## Hackathon
-
-Developed for the **STP'26 Hackathon --- Ejo Labs (2026)**.
