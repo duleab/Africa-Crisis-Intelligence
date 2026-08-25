@@ -498,13 +498,6 @@ The long-term goal is to support humanitarian organizations, public institutions
 
 ---
 
-## Disclaimer
-
-This project is a research and hackathon prototype.
-
-It is **not** an official emergency-warning service and should not be used as the sole basis for life-safety, humanitarian, security, or government decisions.
-
-Always verify critical information through trusted official and humanitarian sources.
 
 ---
 
@@ -514,8 +507,4 @@ Always verify critical information through trusted official and humanitarian sou
 
 AI / Data Science / Computer Vision / Crisis Intelligence
 
----
 
-## Acknowledgment
-
-Built during the **STP'26 Hackathon — Ejo Labs**.
