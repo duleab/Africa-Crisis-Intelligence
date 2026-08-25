@@ -143,9 +143,11 @@ not automatically verified.
 
 ## Demo
 
-The demonstration video is available in:
+Watch the full demonstration video on
+[Google Drive](https://drive.google.com/file/d/1z_iUPFZM-MyFGQGCaVV7aXgAvGwbIRk2/view?usp=sharing).
 
-`demo/africa-crisis-intelligence-demo.mp4`
+A repository copy is also available at
+[`demo/africa-crisis-intelligence-demo.mp4`](demo/africa-crisis-intelligence-demo.mp4).
 
 The demo shows the automated workflow, crisis intelligence output,
 regional map, event dashboard, and Telegram alerting.
