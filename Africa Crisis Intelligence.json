@@ -1,0 +1,2127 @@
+{
+  "name": "Africa Crisis Intelligence — v6.2 Submission Ready",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const expected = ($vars.ACI_WEBHOOK_TOKEN || '').trim();\nconst headers = $input.first().json.headers || {};\nconst received = (headers['x-aci-token'] || headers['X-ACI-Token'] || '').trim();\n\nif (!expected) {\n  return $input.all();\n}\n\nif (received !== expected) {\n  throw new Error('Unauthorized: missing or invalid X-ACI-Token header');\n}\n\nreturn $input.all();"
+      },
+      "id": "b07109dc-37d8-4cc0-8531-34fa4f540063",
+      "name": "Check Webhook Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3488,
+        4224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.confidence }}",
+              "operation": "largerEqual",
+              "value2": 0.1
+            }
+          ]
+        }
+      },
+      "id": "0b99c94b-1c43-4e7d-863e-316b24d9fa70",
+      "name": "IF Analyze ≥ 0.50",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        4896,
+        3888
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [],
+          "number": [
+            {
+              "value1": "={{ $json.confidence }}",
+              "operation": "largerEqual",
+              "value2": 0.5
+            }
+          ]
+        }
+      },
+      "id": "34d2287f-a828-4f4d-a46c-c0501a3c93e5",
+      "name": "IF Alert Required",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        6288,
+        4464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(i => ({\n  json: {\n    ...i.json,\n    headline: i.json.title || `${i.json.event_type} — ${i.json.location || i.json.country}`,\n    intelligence_summary: i.json.description || `A ${i.json.event_type} event was reported (confidence too low for full analysis).`,\n    severity: i.json.confidence >= 0.40 ? 'Monitor' : 'Low',\n    recommended_actions: ['Continue monitoring'],\n    information_gaps: i.json.source_count < 2 ? ['Independent corroborating source'] : [],\n    ai: null\n  }\n}));"
+      },
+      "id": "a344b9cf-b44e-479b-b5c8-e3c781644f29",
+      "name": "Build Low/Medium Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8416,
+        4224
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "22eea73f-c063-48fd-a8b5-8d761a68908f",
+      "name": "Merge High + Low Paths",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        8640,
+        4032
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "bc7bafd1-ac37-4eb1-8d2c-87f35dfb0bed",
+      "name": "Every 30 Minutes1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        2368,
+        3568
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aci-community-report",
+        "options": {}
+      },
+      "id": "8667e8c6-25e7-46e3-8e3a-1038ef63123c",
+      "name": "Community Report Webhook1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        4224
+      ],
+      "webhookId": "e0d0fec7-2ef6-49fa-bc08-23ed1d0ae9e6"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\nconst fmt = d => d.toISOString().slice(0,10);\n\nconst scope = ($vars.ACI_SCOPE || 'EAST_AFRICA').trim().toUpperCase();\n\nconst EAST_AFRICA = [\n  'Ethiopia','Kenya','Uganda','Tanzania','Rwanda','Burundi',\n  'South Sudan','Somalia','Djibouti','Eritrea'\n];\n\nlet countries, bbox, news_scope, acled_region;\n\nif (scope === 'AFRICA') {\n  countries = [];\n  bbox = {minLat:-35.5,maxLat:37.5,minLon:-18.0,maxLon:55.0};\n  news_scope = 'Africa';\n  acled_region = null;\n} else if (scope === 'ETHIOPIA') {\n  countries = ['Ethiopia'];\n  bbox = {minLat:3.0,maxLat:15.2,minLon:32.8,maxLon:48.3};\n  news_scope = 'Ethiopia';\n  acled_region = null;\n} else {\n  countries = EAST_AFRICA;\n  bbox = {minLat:-12.5,maxLat:18.5,minLon:28.0,maxLon:52.5};\n  news_scope = '\"East Africa\" OR Ethiopia OR Kenya OR Uganda OR Tanzania OR Rwanda OR Burundi OR \"South Sudan\" OR Somalia OR Djibouti OR Eritrea';\n  acled_region = 3;\n}\n\nreturn [{json:{\n  scope,\n  target_country: scope === 'ETHIOPIA' ? 'Ethiopia' : '',\n  countries,\n  bbox,\n  news_scope,\n  acled_region,\n  from_date:fmt(from),\n  to_date:fmt(now),\n  generated_at:now.toISOString()\n}}];"
+      },
+      "id": "bb919dd4-54e7-4d53-91db-71eb0ea47c23",
+      "name": "Config + Date Window1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        3568
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://acleddata.com/oauth/token",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/x-www-form-urlencoded"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "username",
+              "value": "={{ $vars.ACI_ACLED_USERNAME }}"
+            },
+            {
+              "name": "password",
+              "value": "={{ $vars.ACI_ACLED_PASSWORD }}"
+            },
+            {
+              "name": "grant_type",
+              "value": "password"
+            },
+            {
+              "name": "client_id",
+              "value": "acled"
+            },
+            {
+              "name": "scope",
+              "value": "authenticated"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "b38736bb-3b62-41e6-b267-835e4014a676",
+      "name": "ACLED OAuth1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2816,
+        3120
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://acleddata.com/api/acled/read",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "_format",
+              "value": "json"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            },
+            {
+              "name": "event_date",
+              "value": "={{ $('Config + Date Window1').item.json.from_date }}|{{ $('Config + Date Window1').item.json.to_date }}"
+            },
+            {
+              "name": "event_date_where",
+              "value": "BETWEEN"
+            },
+            {
+              "name": "region",
+              "value": "={{ $('Config + Date Window1').item.json.acled_region || '' }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "fc4439da-41bd-42a3-a8c8-2e2163b7d3cc",
+      "name": "ACLED Fetch1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3040,
+        3120
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $json;\nconst rows = Array.isArray(payload.data) ? payload.data : [];\nconst cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;\n\nreturn rows\n  .filter(r => {\n    const d = new Date(r.event_date || r.timestamp || 0);\n    return !Number.isNaN(d.getTime()) && d.getTime() >= cutoff;\n  })\n  .map(r => ({\n    json: {\n      source: 'ACLED',\n      source_type: 'structured_conflict',\n      source_event_id: r.event_id_cnty || r.event_id_no_cnty || '',\n      event_type: r.event_type || 'Conflict',\n      sub_event_type: r.sub_event_type || '',\n      title: `${r.event_type || 'Conflict'} — ${r.location || r.admin1 || r.country || ''}`,\n      description: r.notes || '',\n      country: r.country || '',\n      admin1: r.admin1 || '',\n      location: r.location || r.admin1 || '',\n      latitude: Number(r.latitude) || null,\n      longitude: Number(r.longitude) || null,\n      event_time: r.event_date || '',\n      actors: [r.actor1, r.actor2].filter(Boolean),\n      fatalities: Number(r.fatalities) || 0,\n      source_url: 'https://acleddata.com/',\n      credibility_base: 0.30,\n      raw: r\n    }\n  }));"
+      },
+      "id": "8e9a6e5d-fc42-491c-a23f-07262996388f",
+      "name": "Normalize ACLED1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        3120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "eventlist",
+              "value": "EQ;TC;FL;VO;WF;DR"
+            },
+            {
+              "name": "fromdate",
+              "value": "={{ $json.from_date }}"
+            },
+            {
+              "name": "todate",
+              "value": "={{ $json.to_date }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "91b96694-27d3-448c-ab5f-aaf8fd1213bc",
+      "name": "GDACS Disaster Feed1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2832,
+        3296
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const p=$json;\nconst features=Array.isArray(p.features)?p.features:[];\nconst cfg=$('Config + Date Window1').first().json;\nconst allowed=(cfg.countries||[]).map(x=>x.toLowerCase());\n\nconst eventTypeMap={EQ:'Earthquake',TC:'Cyclone',FL:'Flood',VO:'Volcano',WF:'Wildfire',DR:'Drought'};\n\nfunction countryText(pr){\n  const a=pr.country||pr.countryname||'';\n  const b=Array.isArray(pr.affectedcountries)?pr.affectedcountries.map(x=>typeof x==='string'?x:(x.countryname||x.name||'')).join(', '):'';\n  return (a||b||'').trim();\n}\nfunction allowedCountry(text){\n  if(cfg.scope==='AFRICA') return true;\n  if(!allowed.length) return true;\n  const s=String(text||'').toLowerCase();\n  return allowed.some(c=>s.includes(c));\n}\n\nreturn features.map(f=>{\n  const pr=f.properties||{}, coords=f.geometry?.coordinates||[];\n  const code=pr.eventtype||pr.eventType||pr.type||'';\n  const country=countryText(pr);\n  return {\n    source:'GDACS',source_type:'official_disaster',\n    source_event_id:String(pr.eventid||pr.eventId||pr.id||''),\n    event_type:eventTypeMap[code]||code||'Disaster',\n    sub_event_type:pr.alertlevel||pr.alertLevel||'',\n    title:pr.name||pr.eventname||`${eventTypeMap[code]||'Disaster'} — ${country}`,\n    description:pr.description||pr.severitydata?.htmldescription||pr.severitydata?.description||'',\n    country,admin1:'',location:pr.name||country||'',\n    latitude:Array.isArray(coords)&&coords.length>=2?Number(coords[1]):null,\n    longitude:Array.isArray(coords)&&coords.length>=2?Number(coords[0]):null,\n    event_time:pr.fromdate||pr.fromDate||pr.datemodified||pr.date||'',\n    actors:[],fatalities:Number(pr.severitydata?.deaths||0)||0,\n    source_url:pr.url||pr.link||'https://gdacs.org/',\n    credibility_base:0.30,raw:pr\n  };\n}).filter(x=>allowedCountry(x.country)).map(json=>({json}));"
+      },
+      "id": "6de6ded2-b31b-418e-921d-3ced93c83b35",
+      "name": "Normalize GDACS1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        3312
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://news.google.com/rss/search?q={{ encodeURIComponent('(' + $json.news_scope + ') (flood OR drought OR conflict OR clashes OR attack OR earthquake OR wildfire OR cyclone OR displacement OR epidemic OR humanitarian OR \"food insecurity\" OR \"drone strike\")') }}&hl=en-US&gl=US&ceid=US:en",
+        "options": {}
+      },
+      "id": "5f0f9501-c569-47af-951f-00f1e5144b0d",
+      "name": "Google News RSS1",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        3264,
+        3728
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "function detectType(t=''){\n  const s=t.toLowerCase();\n  if(s.includes('drone strike')||s.includes('airstrike')||s.includes('air strike')) return 'Conflict';\n  if(s.includes('flood')) return 'Flood';\n  if(s.includes('drought')) return 'Drought';\n  if(s.includes('earthquake')) return 'Earthquake';\n  if(s.includes('wildfire')||s.includes('forest fire')) return 'Wildfire';\n  if(s.includes('cyclone')||s.includes('storm')) return 'Cyclone';\n  if(s.includes('conflict')||s.includes('clash')||s.includes('attack')||s.includes('violence')||s.includes('fighting')||s.includes('war')) return 'Conflict';\n  if(s.includes('displacement')||s.includes('displaced')) return 'Displacement';\n  if(s.includes('epidemic')||s.includes('outbreak')) return 'Health Emergency';\n  if(s.includes('food insecurity')||s.includes('famine')) return 'Food Security';\n  return 'Emerging Crisis';\n}\n\nconst places=[\n ['Mekelle','Tigray','Ethiopia'],['Addis Ababa','Addis Ababa','Ethiopia'],['Dire Dawa','Dire Dawa','Ethiopia'],\n ['Bahir Dar','Amhara','Ethiopia'],['Gondar','Amhara','Ethiopia'],['Adama','Oromia','Ethiopia'],\n ['Jigjiga','Somali','Ethiopia'],['Hawassa','Sidama','Ethiopia'],['Semera','Afar','Ethiopia'],\n ['Tigray','Tigray','Ethiopia'],['Amhara','Amhara','Ethiopia'],['Oromia','Oromia','Ethiopia'],['Afar','Afar','Ethiopia'],\n ['Nairobi','Nairobi','Kenya'],['Mombasa','Mombasa','Kenya'],['Kisumu','Kisumu','Kenya'],['Kenya','','Kenya'],\n ['Kampala','Kampala','Uganda'],['Uganda','','Uganda'],\n ['Kigali','Kigali','Rwanda'],['Rwanda','','Rwanda'],\n ['Bujumbura','Bujumbura','Burundi'],['Burundi','','Burundi'],\n ['Juba','Juba','South Sudan'],['South Sudan','','South Sudan'],\n ['Mogadishu','Mogadishu','Somalia'],['Hargeisa','Hargeisa','Somalia'],['Somalia','','Somalia'],\n ['Djibouti','Djibouti','Djibouti'],\n ['Asmara','Asmara','Eritrea'],['Eritrea','','Eritrea'],\n ['Dar es Salaam','Dar es Salaam','Tanzania'],['Arusha','Arusha','Tanzania'],['Tanzania','','Tanzania'],\n ['Ethiopia','','Ethiopia']\n];\n\nfunction locate(text){\n  const s=text.toLowerCase();\n  for(const [needle,admin1,country] of places){\n    if(s.includes(needle.toLowerCase())) return {location:needle,admin1,country};\n  }\n  return {location:'',admin1:'',country:''};\n}\n\nreturn $input.all().map(i=>{\n  const r=i.json,title=r.title||'',body=r.contentSnippet||r.content||r.description||'';\n  const combined=`${title} ${body}`,g=locate(combined);\n  return {json:{\n    source:'NEWS',source_type:'open_news',source_event_id:r.guid||r.id||r.link||'',\n    event_type:detectType(combined),sub_event_type:'',title,description:body,\n    country:g.country,admin1:g.admin1,location:g.location,\n    latitude:null,longitude:null,event_time:r.isoDate||r.pubDate||'',\n    actors:[],fatalities:0,source_url:r.link||'',credibility_base:0.40,raw:r\n  }};\n});"
+      },
+      "id": "e3bc2b28-c847-4d67-9475-72c5c0c94797",
+      "name": "Normalize News1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3456,
+        3680
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "15788987-d244-4147-bb74-8c62d6762bca",
+      "name": "Merge ACLED + GDACS1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3488,
+        3184
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "fd457358-6bd4-4ca9-8804-959812eae604",
+      "name": "Merge + News1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        4080,
+        3648
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $json.body || $json;\nconst now = new Date().toISOString();\n\nconst clean = (str, max = 500) => String(str || '').replace(/<[^>]*>/g, '').trim().slice(0, max);\n\nconst lat = b.latitude != null ? Number(b.latitude) : null;\nconst lon = b.longitude != null ? Number(b.longitude) : null;\nconst fatalities = Math.max(0, Number(b.fatalities || 0) || 0);\n\nif (lat !== null && (!Number.isFinite(lat) || lat < -90 || lat > 90)) {\n  throw new Error('Invalid latitude');\n}\nif (lon !== null && (!Number.isFinite(lon) || lon < -180 || lon > 180)) {\n  throw new Error('Invalid longitude');\n}\n\nreturn [{\n  json: {\n    source: 'COMMUNITY',\n    source_type: 'community_report',\n    source_event_id: b.report_id || `community-${Date.now()}`,\n    event_type: clean(b.event_type, 80) || 'Emerging Crisis',\n    sub_event_type: clean(b.sub_event_type, 80),\n    title: clean(b.title, 200) || `${clean(b.event_type) || 'Crisis'} community report — ${clean(b.location || b.country)}`,\n    description: clean(b.description, 1000),\n    country: clean(b.country, 80) || 'Ethiopia',\n    admin1: clean(b.admin1, 80),\n    location: clean(b.location || b.admin1 || b.country, 120),\n    latitude: lat,\n    longitude: lon,\n    event_time: b.event_time || now,\n    actors: Array.isArray(b.actors) ? b.actors.map(a => clean(a, 60)).filter(Boolean) : [],\n    fatalities,\n    source_url: clean(b.source_url, 300),\n    credibility_base: 0.05,\n    raw: b\n  }\n}];"
+      },
+      "id": "8ef56848-09b9-452b-a6f2-e927fa3a8381",
+      "name": "Normalize Community Report1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3712,
+        4224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const current = $input.all()\n  .map(i => i.json)\n  .filter(x => x && x.source && x.event_type);\n\nfunction norm(s = '') {\n  return String(s).toLowerCase()\n    .replace(/[^a-z0-9\\s]/g, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\nfunction dateKey(s) {\n  const d = new Date(s);\n  return Number.isNaN(d.getTime()) ? 'unknown' : d.toISOString().slice(0, 10);\n}\nfunction hoursOld(s) {\n  const d = new Date(s);\n  return Number.isNaN(d.getTime()) ? 9999 : Math.max(0, (Date.now() - d.getTime()) / 36e5);\n}\nfunction meaningfulLoc(e) {\n  const loc = norm(e.location || e.admin1 || '');\n  const country = norm(e.country || '');\n  return loc && loc !== country ? loc : country || 'unknown';\n}\nfunction tokens(s) {\n  return norm(s).split(' ').filter(x => x.length >= 4);\n}\nfunction textOf(e) {\n  return norm(`${e.title || ''} ${e.description || ''} ${e.location || ''} ${e.admin1 || ''}`);\n}\n\nconst broad = new Map();\n\nfor (const e of current) {\n  const broadKey = [\n    norm(e.country || 'unknown'),\n    norm(e.event_type || 'crisis'),\n    dateKey(e.event_time)\n  ].join('|');\n\n  if (!broad.has(broadKey)) broad.set(broadKey, []);\n  broad.get(broadKey).push(e);\n}\n\nconst output = [];\n\nfor (const [broadKey, events] of broad.entries()) {\n  if (!events.length) continue;\n\n  const structured = events.filter(e => e.source !== 'NEWS');\n  const news = events.filter(e => e.source === 'NEWS');\n\n  const groups = [];\n\n  if (structured.length) {\n    const locMap = new Map();\n\n    for (const e of structured) {\n      const loc = meaningfulLoc(e);\n      if (!locMap.has(loc)) locMap.set(loc, []);\n      locMap.get(loc).push(e);\n    }\n\n    for (const [loc, base] of locMap.entries()) {\n      const locTokens = tokens(loc);\n      const matchedNews = news.filter(n => {\n        const t = textOf(n);\n        return locTokens.length === 0 ? false : locTokens.some(tok => t.includes(tok));\n      });\n      groups.push([...base, ...matchedNews]);\n    }\n\n    const attached = new Set(groups.flat().filter(e => e.source === 'NEWS').map(e => e.source_event_id));\n    for (const n of news) {\n      if (!attached.has(n.source_event_id)) groups.push([n]);\n    }\n  } else {\n    const newsMap = new Map();\n    for (const n of news) {\n      const loc = meaningfulLoc(n);\n      if (!newsMap.has(loc)) newsMap.set(loc, []);\n      newsMap.get(loc).push(n);\n    }\n    groups.push(...newsMap.values());\n  }\n\n  for (const group of groups) {\n    if (!group.length) continue;\n\n    const primary = [...group].sort((a, b) => (b.credibility_base || 0) - (a.credibility_base || 0))[0];\n    const sources = [...new Set(group.map(e => e.source))];\n\n    const credibility = Math.min(0.40, Math.max(...group.map(e => Number(e.credibility_base || 0))));\n    const corroboration =\n      sources.length >= 3 ? 0.25 :\n      sources.length === 2 ? 0.15 : 0.00;\n\n    const hasGeo = group.some(e => Number.isFinite(Number(e.latitude)) && Number.isFinite(Number(e.longitude)));\n    const hasNamedLocation = group.some(e => meaningfulLoc(e) !== norm(e.country || ''));\n    const geo = hasGeo ? 0.15 : (hasNamedLocation ? 0.10 : 0.03);\n\n    const freshest = Math.min(...group.map(e => hoursOld(e.event_time)));\n    const time =\n      freshest <= 24 ? 0.15 :\n      freshest <= 72 ? 0.12 :\n      freshest <= 168 ? 0.08 : 0.03;\n\n    const sameCountry = new Set(group.map(e => norm(e.country))).size <= 1;\n    const sameType = new Set(group.map(e => norm(e.event_type))).size <= 1;\n    const consistency = sameCountry && sameType ? 0.15 : 0.08;\n\n    const confidence = Math.min(1, credibility + corroboration + geo + time + consistency);\n    const status =\n      confidence >= 0.70 ? 'HIGH / VERIFIED' : confidence >= 0.50 ? 'ACTIONABLE / ANALYZE' :\n      confidence >= 0.40 ? 'MEDIUM / NEEDS VERIFICATION' :\n      'LOW / MONITOR';\n\n    output.push({\n      json: {\n        event_id: `ACI-${norm(primary.country).toUpperCase().replace(/\\s+/g, '-').slice(0, 10)}-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,\n        event_type: primary.event_type,\n        sub_event_type: primary.sub_event_type || '',\n        country: primary.country,\n        admin1: primary.admin1 || '',\n        location: primary.location,\n        latitude: primary.latitude,\n        longitude: primary.longitude,\n        event_time: primary.event_time,\n        title: primary.title,\n        description: primary.description,\n        fatalities: primary.fatalities || 0,\n        actors: primary.actors || [],\n        sources,\n        source_count: sources.length,\n        evidence: group.map(e => ({\n          source: e.source,\n          title: e.title,\n          url: e.source_url,\n          time: e.event_time,\n          description: (e.description || '').slice(0, 300)\n        })),\n        scoring: {\n          source_credibility: +credibility.toFixed(2),\n          independent_corroboration: +corroboration.toFixed(2),\n          geographic_agreement: +geo.toFixed(2),\n          temporal_agreement: +time.toFixed(2),\n          cross_source_consistency: +consistency.toFixed(2)\n        },\n        confidence: +confidence.toFixed(2),\n        status,\n        alert_required: confidence >= 0.50,\n        generated_at: new Date().toISOString()\n      }\n    });\n  }\n}\n\nreturn output\n  .sort((a, b) => b.json.confidence - a.json.confidence)\n  .slice(0, 10);"
+      },
+      "id": "11f7026b-2359-4bf2-969a-00cc8e7dfa75",
+      "name": "Fuse + Explainable Confidence1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3936,
+        3968
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all(); const originals=$('Throttle Groq Requests — 4s').all();\nreturn items.map((item,index)=>{\n const input=item.json||{}; const original=originals[index]?.json||input;\n const failed=input.error||input.statusCode===429||input.code===429||(input.message&&String(input.message).toLowerCase().includes('too many requests'));\n if(failed){return {json:{...original,ai:null,headline:original.title||`${original.event_type} — ${original.location||original.country}`,intelligence_summary:original.description||`A ${original.event_type} event was reported.`,severity:original.confidence>=0.70?'Elevated':'Monitor',recommended_actions:['Review supporting evidence','Continue monitoring for independent corroboration'],information_gaps:original.source_count<2?['Independent corroborating source']:[],llm_status:'rate_limited_fallback'}};}\n let txt=input.choices?.[0]?.message?.content??input.text??input.message?.content??input.output??'{}';\n if(typeof txt!=='string') txt=JSON.stringify(txt);\n txt=txt.replace(/^```json\\s*/i,'').replace(/```$/g,'').trim();\n let ai={}; try{ai=JSON.parse(txt)}catch{ai={summary:txt&&txt.length>5?txt:(original.description||original.title||'')}}\n return {json:{...original,ai,headline:ai.headline||original.title||`${original.event_type} — ${original.location||original.country}`,intelligence_summary:ai.summary||original.description||`A ${original.event_type} event was reported.`,severity:ai.severity||(original.confidence>=0.85?'High':original.confidence>=0.70?'Elevated':'Monitor'),recommended_actions:Array.isArray(ai.recommended_actions)?ai.recommended_actions:['Review supporting evidence'],information_gaps:Array.isArray(ai.information_gaps)?ai.information_gaps:(original.source_count<2?['Independent corroborating source']:[]),llm_status:'ok'}};\n});"
+      },
+      "id": "49a7996a-7c4c-4fdf-a033-801efa773e10",
+      "name": "Build Intelligence Output1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5952,
+        3984
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $vars.ACI_TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ chat_id: $vars.ACI_TELEGRAM_CHAT_ID, text: `🚨 AFRICA CRISIS INTELLIGENCE\\n\\n${$json.headline || $json.title}\\n\\nType: ${$json.event_type}\\nLocation: ${$json.location || $json.admin1 || $json.country}\\nCountry: ${$json.country || '—'}\\nConfidence: ${Math.round(($json.confidence || 0)*100)}%\\nStatus: ${$json.status}\\nSources: ${($json.sources || []).join(', ')}\\nGeo precision: ${$json.geo_precision || 'UNKNOWN'}\\n\\n${$json.intelligence_summary || $json.description}\\n\\nGenerated: ${$json.generated_at}`, disable_web_page_preview: true }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "9bdbcdfa-679e-4a08-a484-945efa54ea8a",
+      "name": "Telegram Alert1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7744,
+        3792
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const all = $input.all().map(i => i.json);\n\nconst high = all.filter(e => e.confidence >= 0.70).length;\nconst medium = all.filter(e => e.confidence >= 0.40 && e.confidence < 0.70).length;\nconst low = all.filter(e => e.confidence < 0.40).length;\n\nconst sourcesUsed = [...new Set(all.flatMap(e => e.sources || []))];\n\nreturn [{\n  json: {\n    workflow_result: 'Africa Crisis Intelligence pipeline completed',\n    run_summary: {\n      total_events: all.length,\n      high_confidence: high,\n      medium_confidence: medium,\n      low_confidence: low,\n      sources_used: sourcesUsed,\n      generated_at: new Date().toISOString()\n    },\n    events: all,\n    note: 'Events ≥0.50 are eligible for analysis/alerts; previously alerted events skip Groq.'\n  }\n}];"
+      },
+      "id": "4d45f281-003c-4ca7-b02b-f028ce79c16b",
+      "name": "Final Structured Output1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8864,
+        4032
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $vars.ACI_GROQ_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'llama-3.1-8b-instant', messages: [{ role: 'user', content: `You are the Africa Crisis Intelligence analyst. You receive structured evidence and an explainable confidence score produced BEFORE the LLM. Do not invent facts, casualties, affected populations, government actions, or sources. Return ONLY valid JSON with keys: headline, summary, severity, recommended_actions (array), information_gaps (array). Event: ${JSON.stringify($json)}` }], response_format: { type: 'json_object' }, temperature: 0.2, max_tokens: 450 }) }}",
+        "options": {}
+      },
+      "id": "2efdf16d-ab10-4a1a-9d8c-a493f7168da1",
+      "name": "Groq Crisis Analyst",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5728,
+        3984
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 5000,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://api.reliefweb.int/v2/reports",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "appname",
+              "value": "={{ $vars.ACI_RELIEFWEB_APPNAME }}"
+            },
+            {
+              "name": "query[value]",
+              "value": "={{ $('Config + Date Window1').item.json.scope === 'EAST_AFRICA' ? 'East Africa humanitarian crisis disaster conflict drought flood displacement' : ($('Config + Date Window1').item.json.scope === 'AFRICA' ? 'Africa humanitarian crisis disaster conflict drought flood displacement' : 'Ethiopia humanitarian crisis disaster conflict drought flood displacement') }}"
+            },
+            {
+              "name": "limit",
+              "value": "20"
+            },
+            {
+              "name": "sort[]",
+              "value": "date:desc"
+            },
+            {
+              "name": "profile",
+              "value": "full"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "5d14deeb-2e05-423b-99af-220361fbbe43",
+      "name": "ReliefWeb API (UN OCHA)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2816,
+        3504
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://eonet.gsfc.nasa.gov/api/v3/events",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "open"
+            },
+            {
+              "name": "limit",
+              "value": "20"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "323fb9ef-4914-436d-bbf4-59db29d249ab",
+      "name": "NASA EONET",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2800,
+        3952
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "b65032ed-81a6-48b7-93df-2adaff44a799",
+      "name": "USGS Earthquake Hazards API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2816,
+        3728
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $json.data || [];\nreturn items.map(item => ({\n  json: {\n    source: 'RELIEFWEB',\n    source_type: 'humanitarian_report',\n    source_event_id: String(item.id),\n    event_type: 'Crisis',\n    sub_event_type: '',\n    title: item.fields?.title || 'ReliefWeb Report',\n    description: (item.fields?.body || '').replace(/<[^>]*>?/gm, '').substring(0, 500) || item.fields?.title,\n    country: item.fields?.primary_country?.name || $('Config + Date Window1').first().json.target_country,\n    admin1: '',\n    location: item.fields?.primary_country?.name || 'Unknown',\n    latitude: item.fields?.primary_country?.location?.lat || null,\n    longitude: item.fields?.primary_country?.location?.lon || null,\n    event_time: item.fields?.date?.created || new Date().toISOString(),\n    actors: [],\n    fatalities: 0,\n    source_url: item.fields?.url || item.href,\n    credibility_base: 0.25,\n    raw: item\n  }\n}));"
+      },
+      "id": "e518a642-ce93-45db-a480-e74df3c11eb4",
+      "name": "Normalize ReliefWeb",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        3488
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const events = $json.events || [];\nconst cfg = $('Config + Date Window1').first().json;\nconst bbox = cfg.bbox;\n\nfunction inside(lat, lon) {\n  if (!bbox) return true;\n  return Number.isFinite(lat) && Number.isFinite(lon) &&\n    lat >= bbox.minLat && lat <= bbox.maxLat &&\n    lon >= bbox.minLon && lon <= bbox.maxLon;\n}\n\nreturn events\n  .map(e => {\n    const category = e.categories?.[0]?.title || 'Disaster';\n    const geo = e.geometry?.[0] || {};\n    const coords = geo.coordinates || [];\n    const lon = Number(coords[0]);\n    const lat = Number(coords[1]);\n\n    return {\n      source: 'NASA',\n      source_type: 'satellite_alert',\n      source_event_id: e.id,\n      event_type: category,\n      sub_event_type: '',\n      title: e.title || category,\n      description: e.description || `NASA EONET detected ${category}`,\n      country: cfg.target_country || '',\n      admin1: '',\n      location: e.title || cfg.target_country,\n      latitude: Number.isFinite(lat) ? lat : null,\n      longitude: Number.isFinite(lon) ? lon : null,\n      event_time: geo.date || new Date().toISOString(),\n      actors: [],\n      fatalities: 0,\n      source_url: e.sources?.[0]?.url || 'https://eonet.gsfc.nasa.gov',\n      credibility_base: 0.30,\n      raw: e\n    };\n  })\n  .filter(e => !bbox || inside(e.latitude, e.longitude))\n  .map(json => ({ json }));"
+      },
+      "id": "be3c1338-1b44-4a98-88aa-d3999fbb316b",
+      "name": "Normalize NASA EONET",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3280,
+        4112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const features = $json.features || [];\nconst cfg = $('Config + Date Window1').first().json;\nconst bbox = cfg.bbox;\n\nfunction inside(lat, lon) {\n  if (!bbox) return true;\n  return Number.isFinite(lat) && Number.isFinite(lon) &&\n    lat >= bbox.minLat && lat <= bbox.maxLat &&\n    lon >= bbox.minLon && lon <= bbox.maxLon;\n}\n\nreturn features\n  .map(f => {\n    const props = f.properties || {};\n    const coords = f.geometry?.coordinates || [];\n    const lon = Number(coords[0]);\n    const lat = Number(coords[1]);\n\n    return {\n      source: 'USGS',\n      source_type: 'seismic_alert',\n      source_event_id: f.id,\n      event_type: 'Earthquake',\n      sub_event_type: '',\n      title: props.title || 'Earthquake',\n      description: `Magnitude ${props.mag} earthquake near ${props.place}`,\n      country: cfg.target_country || '',\n      admin1: '',\n      location: props.place || cfg.target_country,\n      latitude: Number.isFinite(lat) ? lat : null,\n      longitude: Number.isFinite(lon) ? lon : null,\n      event_time: new Date(props.time || Date.now()).toISOString(),\n      actors: [],\n      fatalities: 0,\n      source_url: props.url || 'https://earthquake.usgs.gov',\n      credibility_base: 0.30,\n      raw: f\n    };\n  })\n  .filter(e => !bbox || inside(e.latitude, e.longitude))\n  .map(json => ({ json }));"
+      },
+      "id": "da8a2228-87c9-4da7-95b7-d66817c7924c",
+      "name": "Normalize USGS Earthquake",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        3920
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "id": "7b49219b-1c31-4b8e-a23f-dbf4a1e70651",
+      "name": "Merge ACLED + GDACS",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3728,
+        3648
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "56b896ea-859e-43a7-b537-ce39199c0da8",
+      "name": "SETUP — Create Dashboard Storage",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        2368,
+        4672
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "aci_events",
+        "columns": {
+          "column": [
+            {
+              "name": "event_id"
+            },
+            {
+              "name": "event_type"
+            },
+            {
+              "name": "sub_event_type"
+            },
+            {
+              "name": "country"
+            },
+            {
+              "name": "admin1"
+            },
+            {
+              "name": "location"
+            },
+            {
+              "name": "latitude",
+              "type": "number"
+            },
+            {
+              "name": "longitude",
+              "type": "number"
+            },
+            {
+              "name": "event_time"
+            },
+            {
+              "name": "title"
+            },
+            {
+              "name": "description"
+            },
+            {
+              "name": "severity"
+            },
+            {
+              "name": "confidence",
+              "type": "number"
+            },
+            {
+              "name": "status"
+            },
+            {
+              "name": "alert_required",
+              "type": "boolean"
+            },
+            {
+              "name": "source_count",
+              "type": "number"
+            },
+            {
+              "name": "sources_json"
+            },
+            {
+              "name": "evidence_json"
+            },
+            {
+              "name": "scoring_json"
+            },
+            {
+              "name": "recommended_actions_json"
+            },
+            {
+              "name": "information_gaps_json"
+            },
+            {
+              "name": "intelligence_summary"
+            },
+            {
+              "name": "headline"
+            },
+            {
+              "name": "generated_at"
+            },
+            {
+              "name": "updated_at"
+            },
+            {
+              "name": "event_fingerprint"
+            },
+            {
+              "name": "geo_precision"
+            },
+            {
+              "name": "geo_confidence",
+              "type": "number"
+            },
+            {
+              "name": "coordinate_source"
+            },
+            {
+              "name": "geo_validated",
+              "type": "boolean"
+            },
+            {
+              "name": "fingerprint_basis"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "b4a87536-1d18-44c0-95d3-b19a7362673e",
+      "name": "Create / Reuse aci_events Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2592,
+        4672
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first().json;const events=Array.isArray(input.events)?input.events:[];return events.map(e=>({json:{event_id:String(e.event_id||''),event_fingerprint:String(e.event_fingerprint||''),event_type:String(e.event_type||'Emerging Crisis'),sub_event_type:String(e.sub_event_type||''),country:String(e.country||''),admin1:String(e.admin1||''),location:String(e.location||e.admin1||e.country||''),latitude:Number.isFinite(Number(e.latitude))?Number(e.latitude):null,longitude:Number.isFinite(Number(e.longitude))?Number(e.longitude):null,geo_precision:String(e.geo_precision||'UNKNOWN'),geo_confidence:Number(e.geo_confidence||0),coordinate_source:String(e.coordinate_source||''),geo_validated:Boolean(e.geo_validated),fingerprint_basis:String(e.fingerprint_basis||''),event_time:String(e.event_time||e.generated_at||new Date().toISOString()),title:String(e.title||e.headline||''),description:String(e.description||''),severity:String(e.severity||'Monitor'),confidence:Number(e.confidence||0),status:String(e.status||''),alert_required:Boolean(e.alert_required),source_count:Number(e.source_count||(e.sources||[]).length||0),sources_json:JSON.stringify(e.sources||[]),evidence_json:JSON.stringify(e.evidence||[]),scoring_json:JSON.stringify(e.scoring||{}),recommended_actions_json:JSON.stringify(e.recommended_actions||[]),information_gaps_json:JSON.stringify(e.information_gaps||[]),intelligence_summary:String(e.intelligence_summary||e.description||''),headline:String(e.headline||e.title||''),generated_at:String(e.generated_at||new Date().toISOString()),updated_at:new Date().toISOString()}}));"
+      },
+      "id": "7e4ffff7-52af-4d25-a508-b6e4cfad395f",
+      "name": "Split Events for Storage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        9088,
+        4032
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "aci_events",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "event_id",
+              "keyValue": "={{ $json.event_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "type": "string"
+            },
+            {
+              "id": "event_type",
+              "displayName": "event_type",
+              "type": "string"
+            },
+            {
+              "id": "sub_event_type",
+              "displayName": "sub_event_type",
+              "type": "string"
+            },
+            {
+              "id": "country",
+              "displayName": "country",
+              "type": "string"
+            },
+            {
+              "id": "admin1",
+              "displayName": "admin1",
+              "type": "string"
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "type": "string"
+            },
+            {
+              "id": "latitude",
+              "displayName": "latitude",
+              "type": "number"
+            },
+            {
+              "id": "longitude",
+              "displayName": "longitude",
+              "type": "number"
+            },
+            {
+              "id": "event_time",
+              "displayName": "event_time",
+              "type": "string"
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "type": "string"
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "type": "string"
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "type": "string"
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "type": "number"
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "type": "string"
+            },
+            {
+              "id": "alert_required",
+              "displayName": "alert_required",
+              "type": "boolean"
+            },
+            {
+              "id": "source_count",
+              "displayName": "source_count",
+              "type": "number"
+            },
+            {
+              "id": "sources_json",
+              "displayName": "sources_json",
+              "type": "string"
+            },
+            {
+              "id": "evidence_json",
+              "displayName": "evidence_json",
+              "type": "string"
+            },
+            {
+              "id": "scoring_json",
+              "displayName": "scoring_json",
+              "type": "string"
+            },
+            {
+              "id": "recommended_actions_json",
+              "displayName": "recommended_actions_json",
+              "type": "string"
+            },
+            {
+              "id": "information_gaps_json",
+              "displayName": "information_gaps_json",
+              "type": "string"
+            },
+            {
+              "id": "intelligence_summary",
+              "displayName": "intelligence_summary",
+              "type": "string"
+            },
+            {
+              "id": "headline",
+              "displayName": "headline",
+              "type": "string"
+            },
+            {
+              "id": "generated_at",
+              "displayName": "generated_at",
+              "type": "string"
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "type": "string"
+            },
+            {
+              "id": "event_fingerprint",
+              "displayName": "event_fingerprint",
+              "type": "string"
+            },
+            {
+              "id": "geo_precision",
+              "displayName": "geo_precision",
+              "type": "string"
+            },
+            {
+              "id": "geo_confidence",
+              "displayName": "geo_confidence",
+              "type": "number"
+            },
+            {
+              "id": "coordinate_source",
+              "displayName": "coordinate_source",
+              "type": "string"
+            },
+            {
+              "id": "geo_validated",
+              "displayName": "geo_validated",
+              "type": "boolean"
+            },
+            {
+              "id": "fingerprint_basis",
+              "displayName": "fingerprint_basis",
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "6e8afb0b-ed59-49d3-9781-bf7d073f6853",
+      "name": "Upsert Events → aci_events",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        9312,
+        4032
+      ]
+    },
+    {
+      "parameters": {
+        "path": "aci-events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d715a4d0-c53e-4d2b-9b32-2de2773ed39d",
+      "name": "GET /aci-events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        4896
+      ],
+      "webhookId": "3f0b73fb-4216-4d38-b893-ceefdc6d1fd0"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "aci_events",
+          "mode": "name"
+        },
+        "returnAll": true
+      },
+      "id": "07a45a5b-f411-40f6-bc89-6b6f21b8c312",
+      "name": "Read aci_events",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2592,
+        4896
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "function p(v,f){if(v==null||v==='')return f;if(typeof v!=='string')return v;try{return JSON.parse(v)}catch{return f}}const events=$input.all().map(i=>i.json).map(r=>({id:r.id,event_id:r.event_id,event_fingerprint:r.event_fingerprint,event_type:r.event_type,sub_event_type:r.sub_event_type,country:r.country,admin1:r.admin1,location:r.location,latitude:r.latitude==null?null:Number(r.latitude),longitude:r.longitude==null?null:Number(r.longitude),geo_precision:r.geo_precision||'UNKNOWN',geo_confidence:Number(r.geo_confidence||0),coordinate_source:r.coordinate_source||'',geo_validated:Boolean(r.geo_validated),event_time:r.event_time,title:r.title,description:r.description,headline:r.headline||r.title,intelligence_summary:r.intelligence_summary||r.description,severity:r.severity,confidence:Number(r.confidence||0),status:r.status,alert_required:Boolean(r.alert_required),source_count:Number(r.source_count||0),sources:p(r.sources_json,[]),evidence:p(r.evidence_json,[]),scoring:p(r.scoring_json,{}),recommended_actions:p(r.recommended_actions_json,[]),information_gaps:p(r.information_gaps_json,[]),generated_at:r.generated_at,updated_at:r.updated_at}));events.sort((a,b)=>(new Date(b.event_time||b.updated_at||0).getTime()||0)-(new Date(a.event_time||a.updated_at||0).getTime()||0));return [{json:{generated_at:new Date().toISOString(),events}}];"
+      },
+      "id": "2238213e-acd5-4eec-aeb6-41700fd09207",
+      "name": "Prepare Dashboard API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2816,
+        4896
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json; charset=utf-8"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "6e77ab36-7834-4efe-ba53-6f5e4b40365c",
+      "name": "Respond /aci-events JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        3040,
+        4896
+      ]
+    },
+    {
+      "parameters": {
+        "path": "aci-dashboard",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "413e7182-cc0b-4f38-83ff-b4eb58e9ccc6",
+      "name": "GET /aci-dashboard",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        2368,
+        4448
+      ],
+      "webhookId": "48282b40-9fbc-41ed-9702-27e4b0173726"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{html:\"<!doctype html>\\n<html lang=\\\"en\\\">\\n<head>\\n<meta charset=\\\"utf-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1\\\">\\n<title>Africa Crisis Intelligence</title>\\n<link rel=\\\"stylesheet\\\" href=\\\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\\\">\\n<style>\\n:root{--bg:#07111f;--panel:#0d1a2b;--panel2:#101f33;--line:#20314a;--text:#eaf2ff;--muted:#91a4bf;--blue:#3b82f6;--cyan:#22d3ee;--green:#22c55e;--amber:#f59e0b;--red:#ef4444}\\n*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}\\nheader{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}\\nh1{font-size:21px;margin:0 0 4px}header p{margin:0;color:var(--muted);font-size:13px}.live{display:flex;gap:8px;align-items:center;color:#b7f7c6;font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:var(--green)}\\nmain{padding:18px;max-width:1680px;margin:auto}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:14px}\\n.card,.map-card,.side,.table-card{background:var(--panel);border:1px solid var(--line);border-radius:14px}.card{padding:14px}.label{color:var(--muted);font-size:12px}.value{font-size:26px;font-weight:700}\\n.toolbar{display:grid;grid-template-columns:2fr repeat(4,1fr);gap:10px;margin-bottom:14px}input,select{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text)}\\n.layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(320px,.7fr);gap:14px}.map-card,.side,.table-card{overflow:hidden}\\n.head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:center}.head h2{font-size:14px;margin:0}.head span{font-size:12px;color:var(--muted)}\\n#map{height:560px;background:#0a1422}.side{min-height:560px}#detail{padding:14px;max-height:560px;overflow:auto}.empty{padding:24px;text-align:center;color:var(--muted);font-size:13px}\\n.legend{display:flex;gap:10px;flex-wrap:wrap}.legend span{font-size:11px;color:var(--muted)}.lg{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}\\n.badge,.source-chip{display:inline-block;border:1px solid var(--line);border-radius:999px;background:var(--panel2)}.badge{padding:4px 8px;margin:3px;font-size:11px}.source-chip{padding:2px 5px;font-size:10px;margin-right:3px}\\n.detail-title{font-size:18px;font-weight:700}.detail-meta{font-size:12px;color:var(--muted);margin:4px 0 10px}.detail-section{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}.detail-section h3{font-size:12px;color:var(--muted);text-transform:uppercase}.detail-section p,.detail-section li{font-size:13px;line-height:1.5}\\n.score-row{display:grid;grid-template-columns:1fr 50px;gap:10px;margin:8px 0}.score-name{font-size:12px;color:var(--muted)}.bar{height:7px;background:#18283d;border-radius:6px;overflow:hidden;margin-top:4px}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--cyan))}\\n.table-card{margin-top:14px}.table-wrap{overflow:auto;max-height:460px}table{width:100%;border-collapse:collapse;font-size:13px}th{position:sticky;top:0;background:#0b1829;color:var(--muted);font-size:11px;text-transform:uppercase}th,td{padding:11px 12px;border-bottom:1px solid #18283d;white-space:nowrap;text-align:left}tbody tr{cursor:pointer}tbody tr:hover{background:#11223a}.event-title{max-width:360px;overflow:hidden;text-overflow:ellipsis}.high{color:#fca5a5}.action{color:#fde68a}.monitor{color:#93c5fd}\\n#message{display:none;margin-bottom:12px;padding:10px;border:1px solid #6b2b2b;border-radius:10px;color:#fecaca}.footer{font-size:11px;color:var(--muted);padding:12px 2px}\\n@media(max-width:1100px){.cards{grid-template-columns:repeat(3,1fr)}.toolbar{grid-template-columns:repeat(2,1fr)}.layout{grid-template-columns:1fr}.side{min-height:0}#detail{max-height:none}}@media(max-width:650px){main{padding:10px}.cards{grid-template-columns:repeat(2,1fr)}.toolbar{grid-template-columns:1fr}#map{height:430px}}\\n.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#0d1a2b;color:#eaf2ff}\\n</style></head>\\n<body>\\n<header><div><h1>Africa Crisis Intelligence</h1><p>East Africa crisis monitoring, verification & early warning</p></div><div class=\\\"live\\\"><span class=\\\"dot\\\"></span><span id=\\\"liveText\\\">Live monitoring</span></div></header>\\n<main>\\n<div id=\\\"message\\\"></div>\\n<section class=\\\"cards\\\">\\n<div class=\\\"card\\\"><div class=\\\"label\\\">Recorded crises</div><div class=\\\"value\\\" id=\\\"total\\\">0</div></div>\\n<div class=\\\"card\\\"><div class=\\\"label\\\">Alerts \\u226550%</div><div class=\\\"value\\\" id=\\\"high\\\">0</div><div class=\\\"label\\\">analysis/alert threshold</div></div>\\n<div class=\\\"card\\\"><div class=\\\"label\\\">Actionable</div><div class=\\\"value\\\" id=\\\"actionable\\\">0</div><div class=\\\"label\\\">50\\u201369%</div></div>\\n<div class=\\\"card\\\"><div class=\\\"label\\\">Monitor</div><div class=\\\"value\\\" id=\\\"monitor\\\">0</div><div class=\\\"label\\\">&lt;50%</div></div>\\n<div class=\\\"card\\\"><div class=\\\"label\\\">Countries affected</div><div class=\\\"value\\\" id=\\\"countries\\\">0</div></div>\\n</section>\\n<section class=\\\"toolbar\\\">\\n<input id=\\\"search\\\" placeholder=\\\"Search crisis, place, headline\\u2026\\\">\\n<select id=\\\"country\\\"><option value=\\\"\\\">All countries</option></select>\\n<select id=\\\"type\\\"><option value=\\\"\\\">All crisis types</option></select>\\n<select id=\\\"confidence\\\"><option value=\\\"0\\\">All confidence</option><option value=\\\"0.5\\\">\\u226550% actionable</option><option value=\\\"0.7\\\">\\u226570% high</option></select>\\n<select id=\\\"source\\\"><option value=\\\"\\\">All sources</option></select>\\n</section>\\n<section class=\\\"layout\\\">\\n<div class=\\\"map-card\\\"><div class=\\\"head\\\"><h2>Live crisis map & heat layer</h2><div class=\\\"legend\\\"><span><i class=\\\"lg\\\" style=\\\"background:#ef4444\\\"></i>High</span><span><i class=\\\"lg\\\" style=\\\"background:#f59e0b\\\"></i>Actionable</span><span><i class=\\\"lg\\\" style=\\\"background:#3b82f6\\\"></i>Monitor</span></div></div><div id=\\\"map\\\"></div></div>\\n<aside class=\\\"side\\\"><div class=\\\"head\\\"><h2>Event intelligence</h2><span>Click a signal or event</span></div><div id=\\\"detail\\\"><div class=\\\"empty\\\">Select an event to inspect evidence, confidence scoring and recommended actions.</div></div></aside>\\n</section>\\n<section class=\\\"table-card\\\"><div class=\\\"head\\\"><h2>Recorded event stream</h2><span id=\\\"countText\\\">0 events</span></div><div class=\\\"table-wrap\\\"><table><thead><tr><th>Time</th><th>Event</th><th>Location</th><th>Sources</th><th>Confidence</th><th>Status</th></tr></thead><tbody id=\\\"rows\\\"></tbody></table></div></section>\\n<div class=\\\"footer\\\">Human verification remains essential for operational decisions.</div>\\n</main>\\n<script src=\\\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\\\"></script>\\n<script src=\\\"https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js\\\"></script>\\n<script>\\n(function(){\\nconst API='./aci-events';let all=[],filtered=[],markers=new Map(),heat,group;\\nconst map=L.map('map').setView([9,40.5],5);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);group=L.layerGroup().addTo(map);\\nconst $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>\\\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\\\"':'&quot;',\\\"'\\\":'&#039;'}[c])),pct=v=>Math.round((Number(v)||0)*100);\\nconst cls=c=>c>=.7?'high':c>=.5?'action':'monitor',label=c=>c>=.7?'HIGH / VERIFIED':c>=.5?'ACTIONABLE / ANALYZE':'MONITOR',color=c=>c>=.7?'#ef4444':c>=.5?'#f59e0b':'#3b82f6';\\nconst dt=s=>{const d=new Date(s);return Number.isNaN(d.getTime())?'\\u2014':d.toLocaleString()},valid=e=>Number.isFinite(Number(e.latitude))&&Number.isFinite(Number(e.longitude));\\nfunction filters(){const cs=[...new Set(all.map(e=>e.country).filter(Boolean))].sort(),ts=[...new Set(all.map(e=>e.event_type).filter(Boolean))].sort(),ss=[...new Set(all.flatMap(e=>e.sources||[]))].sort();$('country').innerHTML='<option value=\\\"\\\">All countries</option>'+cs.map(x=>`<option>${esc(x)}</option>`).join('');$('type').innerHTML='<option value=\\\"\\\">All crisis types</option>'+ts.map(x=>`<option>${esc(x)}</option>`).join('');$('source').innerHTML='<option value=\\\"\\\">All sources</option>'+ss.map(x=>`<option>${esc(x)}</option>`).join('')}\\nfunction apply(){const q=$('search').value.toLowerCase(),c=$('country').value,t=$('type').value,m=Number($('confidence').value||0),s=$('source').value;filtered=all.filter(e=>`${e.title||''} ${e.headline||''} ${e.location||''} ${e.country||''} ${e.event_type||''} ${e.intelligence_summary||''}`.toLowerCase().includes(q)&&(!c||e.country===c)&&(!t||e.event_type===t)&&(Number(e.confidence||0)>=m)&&(!s||(e.sources||[]).includes(s)));summary();draw();table()}\\nfunction summary(){$('total').textContent=filtered.length;$('high').textContent=filtered.filter(e=>e.confidence>=.5).length;$('actionable').textContent=filtered.filter(e=>e.confidence>=.5&&e.confidence<.7).length;$('monitor').textContent=filtered.filter(e=>e.confidence<.5).length;$('countries').textContent=new Set(filtered.map(e=>e.country).filter(Boolean)).size;$('countText').textContent=`${filtered.length} events`}\\nfunction draw(){group.clearLayers();markers.clear();if(heat){map.removeLayer(heat);heat=null}const hp=[],b=[];filtered.forEach(e=>{if(!valid(e))return;const lat=Number(e.latitude),lon=Number(e.longitude),c=Number(e.confidence||0);b.push([lat,lon]);const gc=Math.max(.05,Number(e.geo_confidence||0.35));const sev=(String(e.severity||'').toLowerCase().includes('high')||String(e.severity||'').toLowerCase().includes('critical'))?1:String(e.severity||'').toLowerCase().includes('elevated')?.8:.6;hp.push([lat,lon,Math.max(.03,c*gc*sev)]);const uncertain=(e.geo_precision==='COUNTRY'||e.geo_precision==='REGIONAL');const m=L.circleMarker([lat,lon],{radius:uncertain?(c>=.7?14:c>=.5?12:10):(c>=.7?10:c>=.5?8:6),color:color(c),fillColor:color(c),fillOpacity:uncertain?.42:.82,weight:uncertain?1:2,dashArray:uncertain?'4 4':null}).bindTooltip(`${esc(e.event_type)} \\u00b7 ${esc(e.location||e.country)} \\u00b7 ${pct(c)}% \\u00b7 ${esc(e.geo_precision||'UNKNOWN')}`).on('click',()=>detail(e,false)).addTo(group);markers.set(e.event_id,m)});if(window.L.heatLayer&&hp.length){heat=L.heatLayer(hp,{radius:32,blur:26,maxZoom:9,minOpacity:.25}).addTo(map);heat.bringToBack()}if(b.length===1)map.setView(b[0],7);else if(b.length>1)map.fitBounds(b,{padding:[30,30],maxZoom:8})}\\nfunction detail(e,pan=true){if(pan&&valid(e)){map.setView([Number(e.latitude),Number(e.longitude)],Math.max(map.getZoom(),7));const m=markers.get(e.event_id);if(m)m.openTooltip()}const sc=e.scoring||{},a=e.recommended_actions||[],g=e.information_gaps||[],ev=e.evidence||[],sr=[['Source credibility',sc.source_credibility,.30],['Independent corroboration',sc.independent_corroboration,.25],['Geographic agreement',sc.geographic_agreement,.15],['Temporal agreement',sc.temporal_agreement,.15],['Cross-source consistency',sc.cross_source_consistency,.15]];$('detail').innerHTML=`<div class=\\\"detail-title\\\">${esc(e.headline||e.title||e.event_type)}</div><div class=\\\"detail-meta\\\">${esc(e.location||'Unknown')} \\u00b7 ${dt(e.event_time)}</div><div>${(e.sources||[]).map(x=>`<span class=\\\"badge\\\">${esc(x)}</span>`).join('')}<span class=\\\"badge ${cls(e.confidence)}\\\">${label(e.confidence)}</span><span class=\\\"badge\\\">${pct(e.confidence)}%</span><span class=\\\"badge\\\">Geo: ${esc(e.geo_precision||'UNKNOWN')} \\u00b7 ${pct(e.geo_confidence||0)}%</span></div><div class=\\\"detail-section\\\"><h3>Intelligence summary</h3><p>${esc(e.intelligence_summary||e.description||'No summary.')}</p></div><div class=\\\"detail-section\\\"><h3>Explainable confidence</h3>${sr.map(([n,v,m])=>`<div class=\\\"score-row\\\"><div><div class=\\\"score-name\\\">${n}</div><div class=\\\"bar\\\"><i style=\\\"width:${Math.max(0,Math.min(100,(Number(v||0)/m)*100))}%\\\"></i></div></div><div>${Number(v||0).toFixed(2)}</div></div>`).join('')}</div><div class=\\\"detail-section\\\"><h3>Recommended actions</h3>${a.length?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<p>None listed.</p>'}</div><div class=\\\"detail-section\\\"><h3>Information gaps</h3>${g.length?`<ul>${g.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<p>None recorded.</p>'}</div><div class=\\\"detail-section\\\"><h3>Evidence (${ev.length})</h3>${ev.length?ev.slice(0,8).map(x=>`<p><strong>${esc(x.source||'Source')}</strong> \\u2014 ${esc(x.title||'Untitled')}<br>${x.url?`<a href=\\\"${esc(x.url)}\\\" target=\\\"_blank\\\" rel=\\\"noopener\\\" style=\\\"color:#7dd3fc\\\">Open source</a>`:''}</p>`).join(''):'<p>No evidence stored.</p>'}</div>`}\\nfunction table(){$('rows').innerHTML=filtered.map(e=>`<tr data-id=\\\"${esc(e.event_id)}\\\"><td>${esc(dt(e.event_time))}</td><td class=\\\"event-title\\\"><strong>${esc(e.event_type)}</strong><br><span style=\\\"color:#91a4bf\\\">${esc(e.headline||e.title||'')}</span></td><td>${esc(e.location||e.country||'\\u2014')}</td><td>${(e.sources||[]).slice(0,4).map(s=>`<span class=\\\"source-chip\\\">${esc(s)}</span>`).join('')||'\\u2014'}</td><td class=\\\"${cls(e.confidence)}\\\">${pct(e.confidence)}%</td><td class=\\\"${cls(e.confidence)}\\\">${label(e.confidence)}</td></tr>`).join('');[...$('rows').querySelectorAll('tr')].forEach(r=>r.addEventListener('click',()=>{const e=all.find(x=>x.event_id===r.dataset.id);if(e)detail(e,true)}))}\\nasync function load(){try{const r=await fetch(API,{cache:'no-store'});if(!r.ok)throw new Error('API '+r.status);const d=await r.json();all=Array.isArray(d.events)?d.events:[];filters();apply();$('liveText').textContent='Updated '+new Date().toLocaleTimeString();$('message').style.display='none'}catch(e){$('message').textContent='Dashboard API unavailable: '+e.message+'. Activate the workflow and create the aci_events table.';$('message').style.display='block'}}\\n['search','country','type','confidence','source'].forEach(id=>$(id).addEventListener(id==='search'?'input':'change',apply));load();setInterval(load,30000);\\n})();\\n</script></body></html>\"}}];"
+      },
+      "id": "a1664688-fa3a-4eef-a411-df3cf83f6288",
+      "name": "Build Live Dashboard HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        4448
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "1639b424-2e11-43e1-b602-6e381eb94265",
+      "name": "Respond /aci-dashboard HTML",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2816,
+        4448
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all();\nconst cfg=$('Config + Date Window1').first().json;\nconst bbox=cfg.bbox;\n\nconst gazetteer={\n 'ethiopia':[9.145,40.4897,'COUNTRY',.45],'mekelle':[13.4967,39.4753,'CITY',.95],\n 'addis ababa':[8.9806,38.7578,'CITY',.95],'dire dawa':[9.6009,41.8501,'CITY',.95],\n 'tigray':[13.5,39.5,'ADMIN1',.80],'amhara':[11.6,37.9,'ADMIN1',.80],'oromia':[8.6,39.0,'ADMIN1',.80],\n 'afar':[11.8,41.4,'ADMIN1',.80],'somali':[7.4,43.0,'ADMIN1',.80],'sidama':[6.7,38.5,'ADMIN1',.80],\n 'kenya':[0.0236,37.9062,'COUNTRY',.45],'nairobi':[-1.2864,36.8172,'CITY',.95],\n 'mombasa':[-4.0435,39.6682,'CITY',.95],'kisumu':[-0.0917,34.7680,'CITY',.95],\n 'uganda':[1.3733,32.2903,'COUNTRY',.45],'kampala':[0.3476,32.5825,'CITY',.95],\n 'rwanda':[-1.9403,29.8739,'COUNTRY',.45],'kigali':[-1.9441,30.0619,'CITY',.95],\n 'burundi':[-3.3731,29.9189,'COUNTRY',.45],'bujumbura':[-3.3614,29.3599,'CITY',.95],\n 'south sudan':[6.8770,31.3070,'COUNTRY',.45],'juba':[4.8594,31.5713,'CITY',.95],\n 'somalia':[5.1521,46.1996,'COUNTRY',.45],'mogadishu':[2.0469,45.3182,'CITY',.95],\n 'hargeisa':[9.5624,44.0770,'CITY',.90],\n 'djibouti':[11.8251,42.5903,'COUNTRY',.45],\n 'eritrea':[15.1794,39.7823,'COUNTRY',.45],'asmara':[15.3229,38.9251,'CITY',.95],\n 'tanzania':[-6.3690,34.8888,'COUNTRY',.45],'dar es salaam':[-6.7924,39.2083,'CITY',.95],\n 'arusha':[-3.3869,36.6830,'CITY',.95]\n};\n\nfunction norm(s=''){return String(s).toLowerCase().replace(/[^a-z0-9\\s-]/g,' ').replace(/\\s+/g,' ').trim()}\nfunction inside(lat,lon){return Number.isFinite(lat)&&Number.isFinite(lon)&&(!bbox||(lat>=bbox.minLat&&lat<=bbox.maxLat&&lon>=bbox.minLon&&lon<=bbox.maxLon))}\nfunction resolve(e){\n const texts=[e.location,e.admin1,e.country,e.title,e.description].filter(Boolean).map(norm);\n for(const key of Object.keys(gazetteer)){\n   if(texts.some(t=>t.includes(key))){const [lat,lon,p,c]=gazetteer[key];return {key,lat,lon,p,c}}\n }\n return null;\n}\n\nreturn items.map(i=>{\n const e={...i.json}; let lat=Number(e.latitude),lon=Number(e.longitude);\n let precision=e.geo_precision||'',conf=Number(e.geo_confidence||0),source=e.coordinate_source||'';\n if(inside(lat,lon)){precision=precision||'SOURCE_COORDINATE';conf=conf||.95;source=source||e.source||'source'}\n else{\n   lat=null;lon=null; const r=resolve(e);\n   if(r){lat=r.lat;lon=r.lon;precision=r.p;conf=r.c;source='internal_gazetteer';\n     if(!e.location)e.location=r.key.replace(/\\b\\w/g,c=>c.toUpperCase())}\n }\n e.latitude=lat;e.longitude=lon;e.geo_precision=precision||'UNKNOWN';\n e.geo_confidence=+Math.max(0,Math.min(1,conf||0)).toFixed(2);e.coordinate_source=source||'unresolved';\n e.geo_validated=inside(lat,lon);\n return {json:e};\n});"
+      },
+      "id": "08b7eeb4-b389-429e-8c13-b17572b22f0c",
+      "name": "Geo Validate + Resolve",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4160,
+        3968
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto=require('crypto');\nfunction norm(s=''){return String(s).toLowerCase().replace(/[^a-z0-9\\s]/g,' ').replace(/\\s+/g,' ').trim()}\nfunction day(s){const d=new Date(s);return Number.isNaN(d.getTime())?'unknown':d.toISOString().slice(0,10)}\n\nreturn $input.all().map(i=>{\n const e={...i.json};\n const canonical=[\n   norm(e.country||''),\n   norm(e.admin1||e.location||''),\n   norm(e.event_type||''),\n   day(e.event_time)\n ].join('|');\n const hash=crypto.createHash('sha256').update(canonical).digest('hex').slice(0,16);\n e.event_fingerprint=hash;e.event_id=`ACI-${hash.toUpperCase()}`;e.fingerprint_basis=canonical;\n return {json:e};\n});"
+      },
+      "id": "b6482618-be2b-40b6-8c1e-1cb3957ae4c7",
+      "name": "Stable Event Fingerprint",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4384,
+        3968
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "aci_alerts",
+        "columns": {
+          "column": [
+            {
+              "name": "event_id"
+            },
+            {
+              "name": "event_fingerprint"
+            },
+            {
+              "name": "headline"
+            },
+            {
+              "name": "location"
+            },
+            {
+              "name": "country"
+            },
+            {
+              "name": "confidence",
+              "type": "number"
+            },
+            {
+              "name": "sent_at"
+            },
+            {
+              "name": "telegram_message_id"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      },
+      "id": "87dc84ce-2471-41c3-8c1f-295a5dd2d63d",
+      "name": "Create / Reuse aci_alerts Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2816,
+        4672
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "aci_alerts",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "event_id",
+              "keyValue": "={{ $json.event_id }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "4166fed3-dd7c-4278-a090-db82219bd955",
+      "name": "Lookup Alert History",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        6400,
+        3920
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const alertedList = $input.all().map(i => i.json?.event_id).filter(Boolean);\nconst alertedSet = new Set(alertedList);\nconst originals = $('IF Alert Required').all();\n\nreturn originals.map(item => {\n  const e = item.json || {};\n  const isAlerted = alertedSet.has(e.event_id);\n  \n  return {\n    json: {\n      ...e,\n      already_alerted: isAlerted,\n      previous_alert_sent_at: isAlerted ? 'previously_alerted' : null\n    }\n  };\n});"
+      },
+      "id": "73d82c5e-ec91-4e1c-8e55-af7920196a39",
+      "name": "Attach Alert History Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6624,
+        3920
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.already_alerted }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "ccaa3274-b197-4845-8956-3d28183dee9c",
+      "name": "IF Already Alerted",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        6848,
+        3920
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.geo_validated }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "23d909b5-a5e0-437d-b867-4a67f57e02b7",
+      "name": "IF Has Map Coordinates",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        7072,
+        3792
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.telegram.org/bot{{ $vars.ACI_TELEGRAM_BOT_TOKEN }}/sendLocation",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { chat_id: $vars.ACI_TELEGRAM_CHAT_ID, latitude: $json.latitude, longitude: $json.longitude, horizontal_accuracy: Math.max(1, Math.round((1-($json.geo_confidence||0.5))*10000)) } }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "c851aa81-a73d-4f60-ac54-3375b23c22c8",
+      "name": "Telegram Send Location",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7296,
+        3648
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:$('IF Has Map Coordinates').item.json}];"
+      },
+      "id": "c289f880-9afd-475b-ac58-d43098aee04d",
+      "name": "Restore Event After Map",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7520,
+        3648
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e=$('IF Has Map Coordinates').item.json; const resp=$json; return [{json:{...e,telegram_message_id:String(resp.result?.message_id||'')}}];"
+      },
+      "id": "6cb4041a-4ee5-4120-9bdf-b480c8768f93",
+      "name": "Restore Alert Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7968,
+        3792
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "aci_alerts",
+          "mode": "name"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "event_id",
+              "keyValue": "={{ $json.event_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "event_id": "={{ $json.event_id }}",
+            "event_fingerprint": "={{ $json.event_fingerprint }}",
+            "headline": "={{ $json.headline || $json.title }}",
+            "location": "={{ $json.location || $json.admin1 }}",
+            "country": "={{ $json.country }}",
+            "confidence": "={{ $json.confidence }}",
+            "sent_at": "={{ $now.toISO() }}",
+            "telegram_message_id": "={{ $json.telegram_message_id }}"
+          },
+          "schema": [
+            {
+              "id": "event_id",
+              "displayName": "event_id",
+              "type": "string"
+            },
+            {
+              "id": "event_fingerprint",
+              "displayName": "event_fingerprint",
+              "type": "string"
+            },
+            {
+              "id": "headline",
+              "displayName": "headline",
+              "type": "string"
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "type": "string"
+            },
+            {
+              "id": "country",
+              "displayName": "country",
+              "type": "string"
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "type": "number"
+            },
+            {
+              "id": "sent_at",
+              "displayName": "sent_at",
+              "type": "string"
+            },
+            {
+              "id": "telegram_message_id",
+              "displayName": "telegram_message_id",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b85b9385-4bc6-4503-bdd9-e7727a53eba9",
+      "name": "Upsert Alert History",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        8192,
+        3792
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:$('Restore Alert Event').item.json}];"
+      },
+      "id": "5fcdbbcb-a777-4e9c-b0ea-f8afd676d335",
+      "name": "Restore Event After Alert Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8416,
+        3792
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "aci_alerts",
+          "mode": "name"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "event_id",
+              "keyValue": "={{ $json.event_id }}"
+            }
+          ]
+        },
+        "returnAll": true
+      },
+      "id": "9491d932-c9a0-4209-ac77-9d379ace2f0b",
+      "name": "Pre-LLM Alert History Lookup",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        4512,
+        3472
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all event IDs already recorded in aci_alerts\nconst alertedList = $input.all().map(i => i.json?.event_id).filter(Boolean);\nconst alertedSet = new Set(alertedList);\n\n// Retrieve all incoming events from the IF node\nconst originals = $('IF Analyze ≥ 0.50').all();\n\nreturn originals.map(item => {\n  const e = item.json || {};\n  const isAlerted = alertedSet.has(e.event_id);\n  \n  return {\n    json: {\n      ...e,\n      already_alerted: isAlerted,\n      previous_alert_sent_at: isAlerted ? 'previously_alerted' : null\n    }\n  };\n});"
+      },
+      "id": "26a3b5fa-93cb-4ff2-87d0-661595e53f4d",
+      "name": "Attach Pre-LLM History Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4944,
+        3632
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.already_alerted }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "60f1fc2b-77cd-4637-9daa-d303b97e2ece",
+      "name": "IF Previously Alerted (Pre-LLM)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        5552,
+        3600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(i=>({json:{...i.json,headline:i.json.title||`${i.json.event_type} — ${i.json.location||i.json.country}`,intelligence_summary:i.json.description||`Previously alerted ${i.json.event_type} event.`,severity:i.json.confidence>=0.70?'Elevated':'Monitor',recommended_actions:['Already alerted previously; continue monitoring for meaningful changes'],information_gaps:i.json.source_count<2?['Independent corroborating source']:[],ai:null,llm_skipped_reason:'already_alerted'}}));"
+      },
+      "id": "80f4d1a3-3566-46e5-a2bf-433de822bc20",
+      "name": "Build Previously Alerted Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        8416,
+        3504
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 4
+      },
+      "id": "0848e919-c68b-4988-ad5d-b701c61bbe02",
+      "name": "Throttle Groq Requests — 4s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        5504,
+        3984
+      ],
+      "webhookId": "50098cac-a56f-4b47-b3e4-76e28ff5e82a"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Check Webhook Token": {
+      "main": [
+        [
+          {
+            "node": "Normalize Community Report1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Alert Required": {
+      "main": [
+        [
+          {
+            "node": "Lookup Alert History",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge High + Low Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Low/Medium Output": {
+      "main": [
+        [
+          {
+            "node": "Merge High + Low Paths",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge High + Low Paths": {
+      "main": [
+        [
+          {
+            "node": "Final Structured Output1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 30 Minutes1": {
+      "main": [
+        [
+          {
+            "node": "Config + Date Window1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Community Report Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Check Webhook Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config + Date Window1": {
+      "main": [
+        [
+          {
+            "node": "ACLED OAuth1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GDACS Disaster Feed1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google News RSS1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "ReliefWeb API (UN OCHA)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "NASA EONET",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "USGS Earthquake Hazards API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ACLED OAuth1": {
+      "main": [
+        [
+          {
+            "node": "ACLED Fetch1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ACLED Fetch1": {
+      "main": [
+        [
+          {
+            "node": "Normalize ACLED1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize ACLED1": {
+      "main": [
+        [
+          {
+            "node": "Merge ACLED + GDACS1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GDACS Disaster Feed1": {
+      "main": [
+        [
+          {
+            "node": "Normalize GDACS1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize GDACS1": {
+      "main": [
+        [
+          {
+            "node": "Merge ACLED + GDACS1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Google News RSS1": {
+      "main": [
+        [
+          {
+            "node": "Normalize News1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize News1": {
+      "main": [
+        [
+          {
+            "node": "Merge + News1",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge ACLED + GDACS1": {
+      "main": [
+        [
+          {
+            "node": "Merge + News1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge + News1": {
+      "main": [
+        [
+          {
+            "node": "Fuse + Explainable Confidence1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Community Report1": {
+      "main": [
+        [
+          {
+            "node": "Fuse + Explainable Confidence1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fuse + Explainable Confidence1": {
+      "main": [
+        [
+          {
+            "node": "Geo Validate + Resolve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Intelligence Output1": {
+      "main": [
+        [
+          {
+            "node": "IF Alert Required",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Alert1": {
+      "main": [
+        [
+          {
+            "node": "Restore Alert Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ReliefWeb API (UN OCHA)": {
+      "main": [
+        [
+          {
+            "node": "Normalize ReliefWeb",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NASA EONET": {
+      "main": [
+        [
+          {
+            "node": "Normalize NASA EONET",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "USGS Earthquake Hazards API": {
+      "main": [
+        [
+          {
+            "node": "Normalize USGS Earthquake",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize NASA EONET": {
+      "main": [
+        [
+          {
+            "node": "Merge ACLED + GDACS",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Normalize USGS Earthquake": {
+      "main": [
+        [
+          {
+            "node": "Merge ACLED + GDACS",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Normalize ReliefWeb": {
+      "main": [
+        [
+          {
+            "node": "Merge ACLED + GDACS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge ACLED + GDACS": {
+      "main": [
+        [
+          {
+            "node": "Merge + News1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Groq Crisis Analyst": {
+      "main": [
+        [
+          {
+            "node": "Build Intelligence Output1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SETUP — Create Dashboard Storage": {
+      "main": [
+        [
+          {
+            "node": "Create / Reuse aci_events Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Structured Output1": {
+      "main": [
+        [
+          {
+            "node": "Split Events for Storage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Events for Storage": {
+      "main": [
+        [
+          {
+            "node": "Upsert Events → aci_events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET /aci-events": {
+      "main": [
+        [
+          {
+            "node": "Read aci_events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read aci_events": {
+      "main": [
+        [
+          {
+            "node": "Prepare Dashboard API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Dashboard API": {
+      "main": [
+        [
+          {
+            "node": "Respond /aci-events JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET /aci-dashboard": {
+      "main": [
+        [
+          {
+            "node": "Build Live Dashboard HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Live Dashboard HTML": {
+      "main": [
+        [
+          {
+            "node": "Respond /aci-dashboard HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geo Validate + Resolve": {
+      "main": [
+        [
+          {
+            "node": "Stable Event Fingerprint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stable Event Fingerprint": {
+      "main": [
+        [
+          {
+            "node": "IF Analyze ≥ 0.50",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Analyze ≥ 0.50": {
+      "main": [
+        [
+          {
+            "node": "Pre-LLM Alert History Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Low/Medium Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create / Reuse aci_events Table": {
+      "main": [
+        [
+          {
+            "node": "Create / Reuse aci_alerts Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Alert History": {
+      "main": [
+        [
+          {
+            "node": "Attach Alert History Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Alert History Result": {
+      "main": [
+        [
+          {
+            "node": "IF Already Alerted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Already Alerted": {
+      "main": [
+        [
+          {
+            "node": "Merge High + Low Paths",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Has Map Coordinates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Has Map Coordinates": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Location",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Alert1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Send Location": {
+      "main": [
+        [
+          {
+            "node": "Restore Event After Map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Event After Map": {
+      "main": [
+        [
+          {
+            "node": "Telegram Alert1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Alert Event": {
+      "main": [
+        [
+          {
+            "node": "Upsert Alert History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Alert History": {
+      "main": [
+        [
+          {
+            "node": "Restore Event After Alert Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Event After Alert Record": {
+      "main": [
+        [
+          {
+            "node": "Merge High + Low Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-LLM Alert History Lookup": {
+      "main": [
+        [
+          {
+            "node": "Attach Pre-LLM History Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Pre-LLM History Result": {
+      "main": [
+        [
+          {
+            "node": "IF Previously Alerted (Pre-LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Previously Alerted (Pre-LLM)": {
+      "main": [
+        [
+          {
+            "node": "Build Previously Alerted Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Throttle Groq Requests — 4s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Previously Alerted Output": {
+      "main": [
+        [
+          {
+            "node": "Merge High + Low Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throttle Groq Requests — 4s": {
+      "main": [
+        [
+          {
+            "node": "Groq Crisis Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "3913a4cb-75fc-4df5-b2e2-97b986b75594",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "094837d10d6da03d59744a060fd15b9dad1bf6903939e5858c6ba7e4e9ea1715"
+  },
+  "nodeGroups": [],
+  "id": "vG0Qg26MHJIO4DCk",
+  "tags": []
+}
