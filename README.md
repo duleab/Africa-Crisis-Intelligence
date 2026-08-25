@@ -56,7 +56,7 @@ Africa-Crisis-Intelligence/
 ├── workflow/
 │   └── africa-crisis-intelligence-workflow.json
 ├── dashboard/
-│   └── index.html
+│   └── ACI_demo_dashboard_16_events.html
 ├── docs/
 │   └── screenshots/
 │       ├── dashboard-overview.png
@@ -169,71 +169,10 @@ and expansion from East Africa toward Sub-Saharan Africa.
 
 ## Project Vision
 
-<<<<<<< HEAD
-```text
-docs/demo-script.md
-```
-
----
-
-## Current Prototype Limitations
-
-This is a hackathon MVP.
-
-Current limitations include:
-
-- some news-based events rely on keyword/location extraction;
-- geographic centroids may represent a region rather than an exact incident location;
-- confidence scoring is rule-based and still requires validation;
-- source availability and rate limits may affect coverage;
-- cross-source event matching can be improved;
-- multilingual support is planned but not yet fully implemented; and
-- this system is not an official emergency-warning authority.
-
----
-
-## Future Development
-
-Planned improvements include:
-
-- stronger semantic event matching;
-- persistent cross-run evidence fusion;
-- multilingual crisis intelligence;
-- Amharic and additional African-language support;
-- broader Africa coverage;
-- organization-specific analyst dashboards;
-- more advanced geospatial clustering;
-- role-based alert routing;
-- humanitarian partner integrations;
-- incident timelines; and
-- evidence provenance tracking.
-
----
-
-## Vision
-
-Africa Crisis Intelligence aims to help organizations move from:
-
-```text
-Fragmented crisis signals
-        ↓
-Verified situational awareness
-        ↓
-Faster human decision-making
-```
-
-The long-term goal is to support humanitarian organizations, public institutions, researchers, and communities with accessible, explainable, and locally relevant crisis intelligence.
-
----
-
-
----
-=======
 Africa Crisis Intelligence aims to make crisis information easier to
 discover, verify, understand, map, and communicate so that African
 institutions and communities can develop faster and better-informed
 responses to disasters and emerging crises.
->>>>>>> f91dc53 (Complete Africa Crisis Intelligence STP26 hackathon submission)
 
 ## Author
 
@@ -243,8 +182,4 @@ AI/ML and crisis-intelligence research
 
 ## Hackathon
 
-<<<<<<< HEAD
-
-=======
 Developed for the **STP'26 Hackathon --- Ejo Labs (2026)**.
->>>>>>> f91dc53 (Complete Africa Crisis Intelligence STP26 hackathon submission)
